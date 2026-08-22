@@ -1,6 +1,6 @@
 #ifndef HTTP_PARSE
-#include <stddef.h>
 #define HTTP_PARSE
+#include <stddef.h>
 typedef struct{
     char method[8];
     char path[2048];

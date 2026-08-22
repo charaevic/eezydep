@@ -1,4 +1,4 @@
-#include "../include/route_table.h"
+#include "route_table.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
