@@ -12,12 +12,14 @@
 #include <fcntl.h>
 void transfer(proxy_conn_t*, int, int);
 void send_bad_gw(int);
-void handle_read_headers(proxy_conn_t *conn, route_profile * route_table, int route_count, int epoll_fd){
+void handle_read_headers(proxy_conn_t *conn, proxy_conn_t **conn_table, route_profile * route_table, int route_count, int epoll_fd){
     int numbytes;
+    /* receive into the buffer, taking into account that the header might be split, so use pointer arithmetic
+    to keep track of the length of buffer occupied then simply append to that until we are certain to have the \r\n\r\n */
     if((numbytes = recv(conn->client_fd, (conn->recv_buf)+(conn->recv_len), sizeof(conn->recv_buf)-(conn->recv_len), 0))>0){
         conn->recv_len+=numbytes;
         char * end = strstr(conn->recv_buf, "\r\n\r\n");
-        //If end chars not in stream return and go back to epoll
+        //If end chars not in stream return and go back to epoll (continuing condition)
         if(end == NULL){return;}
         //parse HTTP
         if(http_parse_request(conn->recv_buf, conn->recv_len, &conn->req)!=-1){
@@ -37,13 +39,14 @@ void handle_read_headers(proxy_conn_t *conn, route_profile * route_table, int ro
                 inet_pton(AF_INET, lookup_res->backend_addr, &backend_addr.sin_addr);
                 
                 fcntl(new_sck, F_SETFL, O_NONBLOCK);
-                struct epoll_event new_event = {.events = EPOLLOUT, .data.ptr = conn};
+                struct epoll_event new_event = {.events = EPOLLOUT, .data.fd = new_sck};
                 epoll_ctl(epoll_fd, EPOLL_CTL_ADD, new_sck, &new_event);
 
                 //connect non-blck socket
                 connect(new_sck, (struct sockaddr *) &backend_addr, sizeof(backend_addr));
                 conn->state = STATE_CONN_BACKEND;
                 conn->backend_fd = new_sck;
+                conn_table[new_sck] = conn; 
 
 
 
@@ -56,7 +59,9 @@ void handle_read_headers(proxy_conn_t *conn, route_profile * route_table, int ro
 
 void handle_connecting_backend(proxy_conn_t *conn, int epoll_fd){
     int error = 0;
+    //get 
     socklen_t errlen = sizeof(error);
+    //write the value of SO_ERROR opt into the error variable then check if its 0 (connected) or not
     getsockopt(conn->backend_fd, SOL_SOCKET, SO_ERROR, &error, &errlen);
     if (error !=0){
         conn->state = STATE_CLOSING;
@@ -70,10 +75,11 @@ void handle_connecting_backend(proxy_conn_t *conn, int epoll_fd){
             return;
         }
 
-        //switch both fd to EPOLLIN
+        //switch both backend and client fd to EPOLLIN
         conn->state = STATE_PIPING;
-        struct epoll_event mod_event = {.events = EPOLLIN, .data.ptr = conn};
+        struct epoll_event mod_event = {.events = EPOLLIN, .data.fd = conn->backend_fd};
         epoll_ctl(epoll_fd, EPOLL_CTL_MOD, conn->client_fd, &mod_event);
+        mod_event.data.fd = conn->backend_fd;
         epoll_ctl(epoll_fd, EPOLL_CTL_MOD, conn->backend_fd, &mod_event);
         return;
         
@@ -91,12 +97,14 @@ void handle_piping(proxy_conn_t *conn, int triggered_fd){
     //epoll should only ever contain backend and client fds any other incoming fds are disregarded
 }
 
-void handle_closing(proxy_conn_t* conn, int epoll_fd){
+void handle_closing(proxy_conn_t* conn, proxy_conn_t **conn_table, int epoll_fd){
     epoll_ctl(epoll_fd, EPOLL_CTL_DEL, conn->client_fd, NULL);
+    conn_table[conn->client_fd] = NULL;
     close(conn->client_fd);
     if (conn->backend_fd != -1){
         epoll_ctl(epoll_fd, EPOLL_CTL_DEL, conn->backend_fd, NULL);
         close(conn->backend_fd);
+        conn_table[conn->backend_fd] = NULL;
     }
     free(conn);
     return;
