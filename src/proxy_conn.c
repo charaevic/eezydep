@@ -10,6 +10,10 @@
 #include <limits.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <stdio.h>
 void transfer(proxy_conn_t*, int, int);
 void send_bad_gw(int);
 void handle_read_headers(proxy_conn_t *conn, proxy_conn_t **conn_table, route_profile * route_table, int route_count, int epoll_fd){
@@ -18,6 +22,7 @@ void handle_read_headers(proxy_conn_t *conn, proxy_conn_t **conn_table, route_pr
     to keep track of the length of buffer occupied then simply append to that until we are certain to have the \r\n\r\n */
     if((numbytes = recv(conn->client_fd, (conn->recv_buf)+(conn->recv_len), sizeof(conn->recv_buf)-(conn->recv_len), 0))>0){
         conn->recv_len+=numbytes;
+        conn->recv_buf[conn->recv_len] = '\0';
         char * end = strstr(conn->recv_buf, "\r\n\r\n");
         //If end chars not in stream return and go back to epoll (continuing condition)
         if(end == NULL){return;}

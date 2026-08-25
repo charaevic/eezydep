@@ -3,10 +3,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 route_profile* route_lookup(route_profile* route_table, size_t len, char* hostname){//lookup a route 
-     if (route_table != NULL){
+    printf("Table size: %zu\n", len);
+    if (route_table != NULL){
         route_profile* iterator = route_table;
-        int index = 0;
         for (int i = 0; i < len; i++) {
+            printf("Comparing [%s] with [%s]\n", hostname, iterator->host);
             if (strcmp(hostname, iterator->host) == 0){
                 return iterator;
             }
@@ -14,6 +15,7 @@ route_profile* route_lookup(route_profile* route_table, size_t len, char* hostna
         }
         return NULL;
     }
+    return NULL;
 }
 int route_load(const char *filepath, route_profile *table, size_t max_routes){
     int count = 0;
