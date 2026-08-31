@@ -14,12 +14,21 @@
 #include <sys/epoll.h>
 #include <limits.h>
 #include <sys/stat.h>
-
-#define PORT "8000"
+#include <signal.h>
+#define PORT "80"
 #define BACKLOG 128
+volatile sig_atomic_t shutdown_flag = 0;
+void handle_signal(int sig){
+    (void)sig;
+    write(STDOUT_FILENO, "signal caught\n", 14);
+    shutdown_flag =1;
+}
 void event_loop(route_profile *route_table, int route_count, int listen_sock);
 int main(void){
     printf("starting up...\n");
+    signal(SIGTERM, handle_signal);
+    signal(SIGHUP, handle_signal);
+    signal(SIGINT, handle_signal);
     
     char* path = "./src/config/routes.conf";
     route_profile table[64];
@@ -36,12 +45,19 @@ int main(void){
     hints.ai_flags = AI_PASSIVE;
     getaddrinfo(NULL, PORT, &hints, &res);
     int server_fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-    bind(server_fd, res->ai_addr, res->ai_addrlen);
+    if (bind(server_fd, res->ai_addr, res->ai_addrlen) == -1) {
+        perror("bind failed");
+        return 1;
+    }
+    printf("Bound to port %s\n", PORT);
     listen(server_fd, BACKLOG);
     printf("listening...\n");
     freeaddrinfo(res);
 
 
     event_loop(table, routes_loaded, server_fd);
+    close(server_fd);
+    printf("Closing...\n");
+    return 0;
 
 }
