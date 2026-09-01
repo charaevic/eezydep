@@ -7,7 +7,6 @@ route_profile* route_lookup(route_profile* route_table, size_t len, char* hostna
     if (route_table != NULL){
         route_profile* iterator = route_table;
         for (int i = 0; i < len; i++) {
-            printf("Comparing [%s] with [%s]\n", hostname, iterator->host);
             if (strcmp(hostname, iterator->host) == 0){
                 return iterator;
             }

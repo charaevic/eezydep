@@ -20,12 +20,10 @@
 volatile sig_atomic_t shutdown_flag = 0;
 void handle_signal(int sig){
     (void)sig;
-    write(STDOUT_FILENO, "signal caught\n", 14);
     shutdown_flag =1;
 }
 void event_loop(route_profile *route_table, int route_count, int listen_sock);
 int main(void){
-    printf("starting up...\n");
     signal(SIGTERM, handle_signal);
     signal(SIGHUP, handle_signal);
     signal(SIGINT, handle_signal);
@@ -51,13 +49,11 @@ int main(void){
     }
     printf("Bound to port %s\n", PORT);
     listen(server_fd, BACKLOG);
-    printf("listening...\n");
     freeaddrinfo(res);
 
 
     event_loop(table, routes_loaded, server_fd);
     close(server_fd);
-    printf("Closing...\n");
     return 0;
 
 }

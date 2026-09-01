@@ -42,12 +42,10 @@ void event_loop(route_profile * route_table, int route_count, int listen_sock){
                 int new_client = accept(listen_sock, NULL, NULL);
                 //block new conns if over lim
                 if(active_connections >= MAXCONNECTIONS){
-                    printf("Mi bomboclat too many\n"); //REMOVE==================================================================
                     fflush(stdout);
                     close(new_client);
                     continue;
                 }
-                printf("Got new conn");
                 fflush(stdout);
                 active_connections++;
                 proxy_conn_t * new_conn = calloc(1, sizeof(proxy_conn_t));
@@ -71,8 +69,6 @@ void event_loop(route_profile * route_table, int route_count, int listen_sock){
         }
     }
     //Shutdown
-    printf("Got shutdown: \n");
-    fflush(stdout);
 
     for(int i = 0; i < 65536; i++){
         if (conn_table[i]!=NULL){
