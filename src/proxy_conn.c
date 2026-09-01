@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <errno.h>
+#include <time.h>
 void transfer(proxy_conn_t*, int, int, int, wbuf_t*);
 void send_bad_gw(int);
 int flush_wbuf(int, wbuf_t*);
@@ -23,7 +24,7 @@ void handle_read_headers(proxy_conn_t *conn, proxy_conn_t **conn_table, route_pr
     /* receive into the buffer, taking into account that the header might be split, so use pointer arithmetic
     to keep track of the length of buffer occupied then simply append to that until we are certain to have the \r\n\r\n */
     if((numbytes = recv(conn->client_fd, (conn->recv_buf)+(conn->recv_len), sizeof(conn->recv_buf)-(conn->recv_len), 0))>0){
-        printf("NO HANG\n"); //REMOVE===============================================================================================================
+        conn->last_activity = time(NULL);
         conn->recv_len+=numbytes;
         conn->recv_buf[conn->recv_len] = '\0';
         char * end = strstr(conn->recv_buf, "\r\n\r\n");
@@ -77,6 +78,7 @@ void handle_connecting_backend(proxy_conn_t *conn, int epoll_fd){
             conn->state = STATE_CLOSING;
             return;
         }
+        conn->last_activity = time(NULL);
 
         //switch both backend and client fd to EPOLLIN
         conn->state = STATE_PIPING;
@@ -155,12 +157,11 @@ void transfer(proxy_conn_t* conn, int triggered_fd, int target_fd, int epoll_fd,
         // Partial send — register recepient to EPOLLOUT to retry later
             struct epoll_event mod_event = {.events = EPOLLOUT | EPOLLIN, .data.fd = target_fd};
             epoll_ctl(epoll_fd, EPOLL_CTL_MOD, target_fd, &mod_event);
-            return;
         } else if(rem ==-1){
             conn->state = STATE_CLOSING;
             return;
         }
-
+        conn->last_activity = time(NULL);
     }
 }
 int flush_wbuf(int target_fd, wbuf_t *wb){
@@ -170,6 +171,7 @@ int flush_wbuf(int target_fd, wbuf_t *wb){
         return -1;
     }
     else if (sent >0) wb->rpos +=sent;
+    
     //compact
     if (wb->rpos > sizeof(wb->data) / 2) {
             memmove(wb->data, wb->data + wb->rpos, wb->wpos - wb->rpos);

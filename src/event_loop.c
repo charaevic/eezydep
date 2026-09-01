@@ -33,7 +33,13 @@ void event_loop(route_profile * route_table, int route_count, int listen_sock){
 
     while(!shutdown_flag){
         //wait for epoll events then loop thru them 
-        int n = epoll_wait(epoll_fd, events, MAXEVENTS, -1);
+        int n = epoll_wait(epoll_fd, events, MAXEVENTS, 1000);
+        if (n == -1) {
+            if (errno == EINTR) continue;
+            break;
+        }
+        int timeout;
+        
         for(int i = 0; i< n; i++){
             int event_fd = events[i].data.fd;
 
@@ -53,6 +59,7 @@ void event_loop(route_profile * route_table, int route_count, int listen_sock){
                 new_conn->backend_fd = -1;
                 new_conn->client_fd = new_client;
                 new_conn->state = STATE_READ_HEADER;
+                new_conn->last_activity = time(NULL);
                 conn_table[new_client] = new_conn;
                 //add this conn to epoll and set ptr to the new conn we made
                 struct epoll_event new_event = {.events = EPOLLIN, .data.fd = new_client};
@@ -65,6 +72,21 @@ void event_loop(route_profile * route_table, int route_count, int listen_sock){
                     case STATE_PIPING:          handle_piping(conn, events[i], epoll_fd); break;
                     case STATE_CLOSING:         handle_closing(conn, conn_table, epoll_fd, &active_connections); break;
                 }
+            }
+        }
+        int now = time(NULL);
+        for(int j = 0; j< 65536; j++){
+            if (conn_table[j] != NULL){
+                switch (conn_table[j]->state){
+                    case STATE_READ_HEADER: timeout = 10; break;
+                    case STATE_CONN_BACKEND: timeout = 5; break;
+                    case STATE_PIPING: timeout = 30; break;
+                    default: timeout = 5; break;
+                }
+                if (now - conn_table[j]->last_activity > timeout) {
+                    handle_closing(conn_table[j], conn_table, epoll_fd, &active_connections);
+                }
+                
             }
         }
     }

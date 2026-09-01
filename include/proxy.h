@@ -1,6 +1,7 @@
 #ifndef PROXY
 #define PROXY
 #include "http_parse.h"
+#include <time.h>
 typedef enum{
     STATE_READ_HEADER,
     STATE_CONN_BACKEND,
@@ -22,6 +23,7 @@ typedef struct {
     http_request_t req;
     wbuf_t client_wbuf;
     wbuf_t backend_wbuf;
+    time_t last_activity;
 } proxy_conn_t;
 
 #endif

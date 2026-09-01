@@ -15,7 +15,8 @@
 #include <limits.h>
 #include <sys/stat.h>
 #include <signal.h>
-#define PORT "80"
+#include <time.h>
+#define PORT "8000"
 #define BACKLOG 128
 volatile sig_atomic_t shutdown_flag = 0;
 void handle_signal(int sig){
