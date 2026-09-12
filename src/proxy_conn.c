@@ -40,6 +40,8 @@ void handle_read_headers(proxy_conn_t *conn, proxy_conn_t **conn_table, route_pr
                 return;
             } else {
                 //route found, non-blck socket and connect to backend
+                strncpy(conn->backend_addr, lookup_res->backend_addr, sizeof(conn->backend_addr)-1);
+                conn->backend_port = lookup_res->backend_port;
                 //fresh socket
                 int new_sck = socket(AF_INET, SOCK_STREAM, 0);
                 //fill in address
@@ -93,7 +95,7 @@ void handle_connecting_backend(proxy_conn_t *conn, int epoll_fd){
 }
 
 void handle_piping(proxy_conn_t *conn, struct epoll_event event, int epoll_fd){
-    if(event.events == EPOLLOUT){
+    if(event.events & EPOLLOUT == 1){
         //another conditional partial send
         int partial;
         if(conn->backend_fd == event.data.fd) partial = flush_wbuf(conn->backend_fd, &conn->backend_wbuf); 
@@ -127,22 +129,23 @@ void handle_closing(proxy_conn_t* conn, proxy_conn_t **conn_table, int epoll_fd,
     if (conn->backend_fd != -1){
         epoll_ctl(epoll_fd, EPOLL_CTL_DEL, conn->backend_fd, NULL);
         close(conn->backend_fd);
-        (*activec)--;
         conn_table[conn->backend_fd] = NULL;
     }
+    (*activec)--;
+    log_access(conn);
     free(conn);
     return;
 }
 
 void transfer(proxy_conn_t* conn, int triggered_fd, int target_fd, int epoll_fd, wbuf_t* wb){
     char buf[8192];
-    int n = recv(triggered_fd, buf, sizeof(buf), 0);
+    int bytes_received = recv(triggered_fd, buf, sizeof(buf), 0);
 
-    if(n == 0){
+    if(bytes_received == 0){
         conn->state = STATE_CLOSING;
         return;
     
-    }else if(n == -1){
+    }else if(bytes_received == -1){
         if(errno == EAGAIN || errno == EWOULDBLOCK){
             return;
         } else{
@@ -152,14 +155,23 @@ void transfer(proxy_conn_t* conn, int triggered_fd, int target_fd, int epoll_fd,
     } else{
         if (triggered_fd == conn->backend_fd && !conn->first_response){
             conn->first_response = 1;
+            if (bytes_received>=12){
+                //if first resp, it will necessarily be an HTTP response containing status so we can safely record
+                char status_str[4] = {buf[4], buf[10], buf[11], '\0'};
+                conn->response_status = atoi(status_str);
+            }
             struct timespec now;
             clock_gettime(CLOCK_MONOTONIC, &now);
             conn->latency_ms = ((now.tv_sec - conn->start_time.tv_sec))* 1000 + (now.tv_nsec - conn->start_time.tv_nsec)/1000000;
         }
         //enqueue
-        memcpy(wb->data + wb->wpos, buf, n);
-        wb->wpos += n;
+        memcpy(wb->data + wb->wpos, buf, bytes_received);
+        wb->wpos += bytes_received;
         int rem = flush_wbuf(target_fd, wb);
+
+        if (target_fd == conn->client_fd){
+            conn->bytes_sent +=bytes_received;
+        }
 
         if (rem == 1) {
         // Partial send — register recepient to EPOLLOUT to retry later

@@ -28,7 +28,7 @@ void handle_reload(int sig){
     (void)sig;
     reload_flag = 1;
 }
-void event_loop(route_profile *route_table, int route_count, int listen_sock);
+void event_loop(route_profile *route_table, int *route_count, int listen_sock);
 int main(void){
     signal(SIGTERM, handle_shutdown);
     signal(SIGINT, handle_shutdown);
