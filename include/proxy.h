@@ -24,6 +24,14 @@ typedef struct {
     wbuf_t client_wbuf;
     wbuf_t backend_wbuf;
     time_t last_activity;
+    struct timespec start_time;
+    long latency_ms;
+    int response_status;
+    int first_response; //flag
+    size_t bytes_sent;
+    char backend_addr[64];
+    int backend_port;
+
 } proxy_conn_t;
 
 #endif

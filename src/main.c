@@ -19,15 +19,20 @@
 #define PORT "8000"
 #define BACKLOG 128
 volatile sig_atomic_t shutdown_flag = 0;
-void handle_signal(int sig){
+volatile sig_atomic_t reload_flag = 0;
+void handle_shutdown(int sig){
     (void)sig;
-    shutdown_flag =1;
+    shutdown_flag = 1;
 }
-void event_loop(route_profile *route_table, int route_count, int listen_sock);
+void handle_reload(int sig){
+    (void)sig;
+    reload_flag = 1;
+}
+void event_loop(route_profile *route_table, int *route_count, int listen_sock);
 int main(void){
-    signal(SIGTERM, handle_signal);
-    signal(SIGHUP, handle_signal);
-    signal(SIGINT, handle_signal);
+    signal(SIGTERM, handle_shutdown);
+    signal(SIGINT, handle_shutdown);
+    signal(SIGHUP, handle_reload);
     
     char* path = "./src/config/routes.conf";
     route_profile table[64];
@@ -53,7 +58,7 @@ int main(void){
     freeaddrinfo(res);
 
 
-    event_loop(table, routes_loaded, server_fd);
+    event_loop(table, &routes_loaded, server_fd);
     close(server_fd);
     return 0;
 

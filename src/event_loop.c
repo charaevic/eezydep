@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include "proxy.h"
 #include "http_parse.h"
 #include "route_table.h"
@@ -16,10 +17,12 @@
 #include <limits.h>
 #include <sys/stat.h>
 #include <signal.h>
+#include <time.h>
 #define MAXEVENTS 64
 #define MAXCONNECTIONS 1024
 extern volatile sig_atomic_t shutdown_flag;
-void event_loop(route_profile * route_table, int route_count, int listen_sock){
+extern volatile sig_atomic_t reload_flag;
+void event_loop(route_profile * route_table, int *route_count, int listen_sock){
     //maxconn
     int active_connections = 0;
     //create epoll
@@ -32,6 +35,11 @@ void event_loop(route_profile * route_table, int route_count, int listen_sock){
     proxy_conn_t * conn_table[65536] = {NULL};
 
     while(!shutdown_flag){
+        if (reload_flag) {
+            reload_flag = 0;
+            *route_count = route_load("config/routes.conf", route_table, 64);
+            fprintf(stderr, "Reloaded %d routes\n", *route_count);
+        }
         //wait for epoll events then loop thru them 
         int n = epoll_wait(epoll_fd, events, MAXEVENTS, 1000);
         if (n == -1) {
@@ -45,10 +53,11 @@ void event_loop(route_profile * route_table, int route_count, int listen_sock){
 
 
             if (event_fd == listen_sock) {
-                int new_client = accept(listen_sock, NULL, NULL);
+                int new_client = accept4(listen_sock, NULL, NULL, SOCK_NONBLOCK | SOCK_CLOEXEC);
+                printf("new conn\n");
+                fflush(stdout);
                 //block new conns if over lim
                 if(active_connections >= MAXCONNECTIONS){
-                    fflush(stdout);
                     close(new_client);
                     continue;
                 }
@@ -67,7 +76,7 @@ void event_loop(route_profile * route_table, int route_count, int listen_sock){
             } else {
                 proxy_conn_t *conn = conn_table[event_fd];
                 switch (conn->state) {
-                    case STATE_READ_HEADER:     handle_read_headers(conn, conn_table, route_table, route_count, epoll_fd); break;
+                    case STATE_READ_HEADER:     handle_read_headers(conn, conn_table, route_table, *route_count, epoll_fd); break;
                     case STATE_CONN_BACKEND:    handle_connecting_backend(conn, epoll_fd); break;
                     case STATE_PIPING:          handle_piping(conn, events[i], epoll_fd); break;
                     case STATE_CLOSING:         handle_closing(conn, conn_table, epoll_fd, &active_connections); break;
