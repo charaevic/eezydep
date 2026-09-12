@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 199309L
 #include "proxy.h"
 #include "http_parse.h"
 #include "route_table.h"
@@ -53,6 +54,7 @@ void handle_read_headers(proxy_conn_t *conn, proxy_conn_t **conn_table, route_pr
 
                 //connect non-blck socket
                 connect(new_sck, (struct sockaddr *) &backend_addr, sizeof(backend_addr));
+                clock_gettime(CLOCK_MONOTONIC, &conn->start_time);
                 conn->state = STATE_CONN_BACKEND;
                 conn->backend_fd = new_sck;
                 conn_table[new_sck] = conn; 
@@ -148,6 +150,12 @@ void transfer(proxy_conn_t* conn, int triggered_fd, int target_fd, int epoll_fd,
             return;
         }
     } else{
+        if (triggered_fd == conn->backend_fd && !conn->first_response){
+            conn->first_response = 1;
+            struct timespec now;
+            clock_gettime(CLOCK_MONOTONIC, &now);
+            conn->latency_ms = ((now.tv_sec - conn->start_time.tv_sec))* 1000 + (now.tv_nsec - conn->start_time.tv_nsec)/1000000;
+        }
         //enqueue
         memcpy(wb->data + wb->wpos, buf, n);
         wb->wpos += n;
