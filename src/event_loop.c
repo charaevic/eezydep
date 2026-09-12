@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include "proxy.h"
 #include "http_parse.h"
 #include "route_table.h"

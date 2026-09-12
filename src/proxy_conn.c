@@ -2,6 +2,7 @@
 #include "proxy.h"
 #include "http_parse.h"
 #include "route_table.h"
+#include "log.h"
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -95,7 +96,7 @@ void handle_connecting_backend(proxy_conn_t *conn, int epoll_fd){
 }
 
 void handle_piping(proxy_conn_t *conn, struct epoll_event event, int epoll_fd){
-    if(event.events & EPOLLOUT == 1){
+    if(event.events & EPOLLOUT){
         //another conditional partial send
         int partial;
         if(conn->backend_fd == event.data.fd) partial = flush_wbuf(conn->backend_fd, &conn->backend_wbuf); 
@@ -157,7 +158,7 @@ void transfer(proxy_conn_t* conn, int triggered_fd, int target_fd, int epoll_fd,
             conn->first_response = 1;
             if (bytes_received>=12){
                 //if first resp, it will necessarily be an HTTP response containing status so we can safely record
-                char status_str[4] = {buf[4], buf[10], buf[11], '\0'};
+                char status_str[4] = {buf[9], buf[10], buf[11], '\0'};
                 conn->response_status = atoi(status_str);
             }
             struct timespec now;
