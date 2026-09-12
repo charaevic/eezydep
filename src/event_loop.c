@@ -3,6 +3,7 @@
 #include "http_parse.h"
 #include "route_table.h"
 #include "proxy_conn.h"
+#include "health.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -75,6 +76,7 @@ void event_loop(route_profile * route_table, int *route_count, int listen_sock){
                 epoll_ctl(epoll_fd, EPOLL_CTL_ADD,  new_client, &new_event);
             } else {
                 proxy_conn_t *conn = conn_table[event_fd];
+                if (conn == NULL) continue;
                 switch (conn->state) {
                     case STATE_READ_HEADER:     handle_read_headers(conn, conn_table, route_table, *route_count, epoll_fd); break;
                     case STATE_CONN_BACKEND:    handle_connecting_backend(conn, epoll_fd); break;
@@ -84,6 +86,7 @@ void event_loop(route_profile * route_table, int *route_count, int listen_sock){
             }
         }
         int now = time(NULL);
+
         for(int j = 0; j< 65536; j++){
             if (conn_table[j] != NULL){
                 switch (conn_table[j]->state){
@@ -96,6 +99,13 @@ void event_loop(route_profile * route_table, int *route_count, int listen_sock){
                     handle_closing(conn_table[j], conn_table, epoll_fd, &active_connections);
                 }
                 
+            }
+        }
+
+        for (int r = 0; r < *route_count; r++){
+            if (now - route_table[r].last_check > 30){
+                printf("\nrunning health check\n");
+                check_backend_health(&route_table[r]);
             }
         }
     }
