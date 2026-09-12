@@ -6,7 +6,7 @@ route_profile* route_lookup(route_profile* route_table, size_t len, char* hostna
     printf("Table size: %zu\n", len);
     if (route_table != NULL){
         route_profile* iterator = route_table;
-        for (int i = 0; i < len; i++) {
+        for (size_t i = 0; i < len; i++) {
             if (strcmp(hostname, iterator->host) == 0){
                 return iterator;
             }
@@ -17,7 +17,7 @@ route_profile* route_lookup(route_profile* route_table, size_t len, char* hostna
     return NULL;
 }
 int route_load(const char *filepath, route_profile *table, size_t max_routes){
-    int count = 0;
+    size_t count = 0;
     FILE* file = fopen(filepath, "r");
     if (file == NULL){return -1;}
     char buffer[1024];
@@ -32,6 +32,8 @@ int route_load(const char *filepath, route_profile *table, size_t max_routes){
         strncpy(table[count].host, hostname, sizeof(table[count].host) - 1);
         strncpy(table[count].backend_addr, addr, sizeof(table[count].backend_addr) - 1);
         table[count].backend_port = port;
+        table[count].healthy = 1;
+        table[count].last_check = 0;
         count++;
 
     }

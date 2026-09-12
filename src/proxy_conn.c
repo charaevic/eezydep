@@ -19,7 +19,7 @@
 #include <errno.h>
 #include <time.h>
 void transfer(proxy_conn_t*, int, int, int, wbuf_t*);
-void send_bad_gw(int);
+void send_http_error(int, int, const char*);
 int flush_wbuf(int, wbuf_t*);
 void handle_read_headers(proxy_conn_t *conn, proxy_conn_t **conn_table, route_profile * route_table, int route_count, int epoll_fd){
     int numbytes;
@@ -35,9 +35,11 @@ void handle_read_headers(proxy_conn_t *conn, proxy_conn_t **conn_table, route_pr
         //parse HTTP
         if(http_parse_request(conn->recv_buf, conn->recv_len, &conn->req)!=-1){
             route_profile* lookup_res = route_lookup(route_table, route_count, conn->req.host);
-            if(lookup_res == NULL){
+            if(lookup_res == NULL || !lookup_res->healthy){
+                
                 conn->state = STATE_CLOSING;
-                send_bad_gw(conn-> client_fd);
+                send_http_error(conn->client_fd, lookup_res ? 503 : 502, lookup_res ? "Service Unavailable" : "Bad Gateway");
+                
                 return;
             } else {
                 //route found, non-blck socket and connect to backend
@@ -74,7 +76,7 @@ void handle_connecting_backend(proxy_conn_t *conn, int epoll_fd){
     getsockopt(conn->backend_fd, SOL_SOCKET, SO_ERROR, &error, &errlen);
     if (error !=0){
         conn->state = STATE_CLOSING;
-        send_bad_gw(conn->client_fd);
+        send_http_error(conn->client_fd, 502, "Bad Gateway");
         return;
     } else{
         //forward whatever is in conn pointer (recv_buf)
@@ -203,9 +205,10 @@ int flush_wbuf(int target_fd, wbuf_t *wb){
     if(wb->rpos < wb->wpos) return 1; else return 0;
 }
 
-void send_bad_gw(int spec_fd){
-    const char *bad_gw = "HTTP/1.1 502 Bad Gateway\r\n\r\n";
-    send(spec_fd, bad_gw, strlen(bad_gw), 0);
+void send_http_error(int spec_fd, int status_code, const char *reason){
+    char header[1024];
+    snprintf(header, sizeof(header), "HTTP/1.1 %d %s\r\nContent-Length: %d\r\n\r\n%s", status_code, reason, (int)strlen(reason), reason);
+    int sent = send(spec_fd, header, strlen(header), 0);
     return;
 }
 
