@@ -1,22 +1,28 @@
 # Eezydep
-Eezydep is an event-driven HTTP reverse-proxy written in C for Linux systems, built arount non-blocking sockets and `epoll`.
-It routes incoming HTTP requests to configurable backend services based on the `Host` HTTP header. Each proxied connection is managed through an explicit state machine, with buffered bidirectional I/O, connection timeouts based on state and synchronous backend connection handling.
+Eezydep is an event-driven HTTP reverse proxy written in C for Linux systems, built around non-blocking sockets and `epoll`.
+It routes incoming HTTP requests to configurable backend services based on the HTTP `Host` header. Each proxied connection is managed through an explicit state machine, with buffered bidirectional I/O, state-specific connection timeouts and non-blocking backend connection establishment.
 
-**Status:** In development. Eezydep currently implements the subset of HTTP/1.x required for host-based reverse proxying and is not yet intended for production use.
+**Status:** In active development. Eezydep is suitable for development,
+experimentation, hackathon projects, and lightweight self-hosted services,
+while ongoing work focuses on reliability and production hardening.
 
 ## Features
 - Event-driven networking using Linux `epoll`
+- Configurable backend routes
 - Non-blocking client and backend sockets
 - Host-based HTTP routing
-- Asynchronous backend connection establishment
+- Non-blocking backend connection establishment
 - Explicit per-connection state machine
 - Bidirectional buffered I/O
 - Partial read/write handling
-- Connection and state-specific timeouts
-- Configurable backend routes
-- Signal-driven clean shutdown
+- State-specific connection timeouts
+- Runtime route reload triggered by `SIGHUP`
+- Periodic TCP backend health checks
+- Automatic `503 Service Unavailable` responses for unhealthy backends
+- Access logging with request, upstream, response status, latency, and byte metadata
+- Signal-driven shutdown
 
-## Architecture & State Machine
+## Architecture
 ```mermaid
 flowchart LR
     C[Client]
@@ -74,7 +80,8 @@ A proxied connection moves through the following states:
 ### `READ_HEADER`
 
 Eezydep reads HTTP headers from the client until a complete header block is
-available. The `Host` header is extracted the corresponding backend route is retrieved from a configuration file.
+available. The `Host` header is extracted and the corresponding backend route is retrieved
+from the routing table.
 
 ### `CONNECT_BACKEND`
 
@@ -103,26 +110,26 @@ Example:
 api.eezydep.org 127.0.0.1:8080
 auth.eezydep.org 127.0.0.1:9000
 ```
-a request containing `Host: api.eezydep.org` will be forwarded to `127.0.0.1:8080`
+A request containing `Host: api.eezydep.org` will be forwarded to `127.0.0.1:8080`
 
 ## Current limitations
 
-- Linux only due to the use of `epoll`
+Eezydep is still being hardened for reliability and security-sensitive
+production workloads.
+
+- Linux only, due to reliance on `epoll`
 - HTTP/1.x only
-- No TLS termination [in progress]
-- HTTP parsing implements only the subset required for host-based routing
 - Each hostname currently maps to a single backend
-- No load balancing between backend instances
+- No load balancing between upstream instances
 
 ## Roadmap
 
 Near-term development priorities:
 
+- [ ] Add CLI tooling
 - [ ] Complete bounded-buffer backpressure
+- [ ] Make backend health checks fully non-blocking
 - [ ] Expand integration and stress testing
-- [ ] Add zero-downtime route reload via `SIGHUP`
-- [ ] Add backend health checks
-- [ ] Add structured logging and metrics
 - [ ] Add TLS termination
 
 Long term, Eezydep is intended to serve as the networking layer of a lightweight
