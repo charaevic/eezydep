@@ -17,6 +17,7 @@ typedef struct{
 typedef struct {
     int client_fd;
     int backend_fd;
+    int paused_fd;
     conn_state_t state;
     char recv_buf[8192];
     size_t recv_len;

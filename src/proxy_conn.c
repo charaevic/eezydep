@@ -25,10 +25,20 @@ void handle_read_headers(proxy_conn_t *conn, proxy_conn_t **conn_table, route_pr
     int numbytes;
     /* receive into the buffer, taking into account that the header might be split, so use pointer arithmetic
     to keep track of the length of buffer occupied then simply append to that until we are certain to have the \r\n\r\n */
-    if((numbytes = recv(conn->client_fd, (conn->recv_buf)+(conn->recv_len), sizeof(conn->recv_buf)-(conn->recv_len), 0))>0){
+    if((numbytes = recv(conn->client_fd, (conn->recv_buf)+(conn->recv_len), sizeof(conn->recv_buf)-(conn->recv_len)-1, 0))>0){
         conn->last_activity = time(NULL);
         conn->recv_len+=numbytes;
         conn->recv_buf[conn->recv_len] = '\0';
+        //buffer full but headers incomplete -> reject
+
+        if (conn->recv_len >=sizeof(conn->recv_buf)-1){
+            char *end = strstr(conn->recv_buf, "\r\n\r\n");
+            if (end == NULL){
+                send_http_error(conn->client_fd, 431,"Request Header Fields Too Large");
+                conn->state = STATE_CLOSING;
+                return;
+            }
+        }
         char * end = strstr(conn->recv_buf, "\r\n\r\n");
         //If end chars not in stream return and go back to epoll (continuing condition)
         if(end == NULL){return;}
@@ -81,18 +91,28 @@ void handle_connecting_backend(proxy_conn_t *conn, int epoll_fd){
     } else{
         //forward whatever is in conn pointer (recv_buf)
         //send it to conn->backend_fd
-        if(send(conn->backend_fd, conn->recv_buf, conn->recv_len, 0) == -1){
+        //handle partial write
+        memcpy(conn->backend_wbuf.data + conn->backend_wbuf.wpos, conn->recv_buf, conn->recv_len);
+        conn->backend_wbuf.wpos += conn->recv_len;
+        //try to flush
+        int rem = flush_wbuf(conn->backend_fd, &conn->backend_wbuf);
+        if (rem ==-1){
             conn->state = STATE_CLOSING;
             return;
         }
         conn->last_activity = time(NULL);
-
-        //switch both backend and client fd to EPOLLIN
         conn->state = STATE_PIPING;
-        struct epoll_event mod_event = {.events = EPOLLIN, .data.fd = conn->client_fd};
-        epoll_ctl(epoll_fd, EPOLL_CTL_MOD, conn->client_fd, &mod_event);
-        mod_event.data.fd = conn->backend_fd;
-        epoll_ctl(epoll_fd, EPOLL_CTL_MOD, conn->backend_fd, &mod_event);
+
+        //if partial the keep epollout on backend to flush rest
+        if (rem == 1) {
+            struct epoll_event mod_event = {.events = EPOLLIN | EPOLLOUT, .data.fd = conn->backend_fd};
+            epoll_ctl(epoll_fd, EPOLL_CTL_MOD, conn->backend_fd, &mod_event);
+        } else {
+            struct epoll_event mod_event = {.events = EPOLLIN, .data.fd = conn->backend_fd};
+            epoll_ctl(epoll_fd, EPOLL_CTL_MOD, conn->backend_fd, &mod_event);
+        }
+        struct epoll_event client_event = {.events = EPOLLIN, .data.fd = conn->client_fd};
+        epoll_ctl(epoll_fd, EPOLL_CTL_MOD, conn->client_fd, &client_event);
         return;    
     }
 }

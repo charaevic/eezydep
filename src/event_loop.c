@@ -70,6 +70,7 @@ void event_loop(route_profile * route_table, int *route_count, int listen_sock){
                 new_conn->client_fd = new_client;
                 new_conn->state = STATE_READ_HEADER;
                 new_conn->last_activity = time(NULL);
+                new_conn->paused_fd = -1;
                 conn_table[new_client] = new_conn;
                 //add this conn to epoll and set ptr to the new conn we made
                 struct epoll_event new_event = {.events = EPOLLIN, .data.fd = new_client};
