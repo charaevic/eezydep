@@ -15,6 +15,7 @@ while ongoing work focuses on reliability and production hardening.
 - Explicit per-connection state machine
 - Bidirectional buffered I/O
 - Partial read/write handling
+- Bounded-buffer backpressure
 - State-specific connection timeouts
 - Runtime route reload triggered by `SIGHUP`
 - Periodic TCP backend health checks
@@ -127,7 +128,6 @@ production workloads.
 Near-term development priorities:
 
 - [ ] Add CLI tooling
-- [ ] Complete bounded-buffer backpressure
 - [ ] Make backend health checks fully non-blocking
 - [ ] Expand integration and stress testing
 - [ ] Add TLS termination
