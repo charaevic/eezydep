@@ -28,6 +28,9 @@ int http_parse_request(const char *raw, size_t len, http_request_t* req){
     char* hoste = strstr(hosts, "\r\n");
     if(hoste == NULL){return -1;}
     size_t length = hoste - (hosts+6);
+    if (length >= sizeof(req->host)){
+        return -1;
+    }
     strncpy(req->host, hosts+6, length);
     req->host[length] = '\0';
 

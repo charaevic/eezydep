@@ -33,6 +33,7 @@ int main(void){
     signal(SIGTERM, handle_shutdown);
     signal(SIGINT, handle_shutdown);
     signal(SIGHUP, handle_reload);
+    signal(SIGPIPE, SIG_IGN)
     
     char* path = "./src/config/routes.conf";
     route_profile table[64];
