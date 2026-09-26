@@ -33,9 +33,9 @@ int main(void){
     signal(SIGTERM, handle_shutdown);
     signal(SIGINT, handle_shutdown);
     signal(SIGHUP, handle_reload);
-    signal(SIGPIPE, SIG_IGN)
+    signal(SIGPIPE, SIG_IGN);
     
-    char* path = "./src/config/routes.conf";
+    char* path = "./config/routes.conf";
     route_profile table[64];
     int routes_loaded = route_load(path, table, 64);
     if (routes_loaded <= 0) {
