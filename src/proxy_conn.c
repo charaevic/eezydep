@@ -128,6 +128,11 @@ void handle_piping(proxy_conn_t *conn, struct epoll_event event, int epoll_fd){
             //remove epollout
             struct epoll_event mod_event = {.events = EPOLLIN, .data.fd = event.data.fd};
             epoll_ctl(epoll_fd, EPOLL_CTL_MOD, event.data.fd, &mod_event);
+            if (conn->paused_fd != -1){
+                struct epoll_event resume = {.events = EPOLLIN, .data.fd = conn->paused_fd};
+                epoll_ctl(epoll_fd, EPOLL_CTL_MOD, conn->paused_fd, &resume);
+                conn->paused_fd = -1;
+            }
             return;
         }
         else{
@@ -162,6 +167,14 @@ void handle_closing(proxy_conn_t* conn, proxy_conn_t **conn_table, int epoll_fd,
 
 void transfer(proxy_conn_t* conn, int triggered_fd, int target_fd, int epoll_fd, wbuf_t* wb){
     char buf[8192];
+    size_t available = sizeof(wb->data) - wb->wpos;
+        if(available < sizeof(buf)){
+            //full buffer disable read from source
+            struct epoll_event mod = {.events = 0 , .data.fd = triggered_fd};
+            epoll_ctl(epoll_fd, EPOLL_CTL_MOD, triggered_fd, &mod);
+            conn->paused_fd = triggered_fd;
+            return;
+        }
     int bytes_received = recv(triggered_fd, buf, sizeof(buf), 0);
 
     if(bytes_received == 0){
