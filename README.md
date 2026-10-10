@@ -113,6 +113,62 @@ auth.eezydep.org 127.0.0.1:9000
 ```
 A request containing `Host: api.eezydep.org` will be forwarded to `127.0.0.1:8080`
 
+## Prerequisites
+
+- Linux (Debian 12+ / Ubuntu 22.04+)
+- gcc, make, build-essential
+- Python 3
+- A domain with Cloudflare DNS (for public access, optional for local testing)
+
+## Quick Start (local testing)
+
+git clone https://github.com/charaevic/eezydep.git
+cd eezydep
+make
+
+### Create a route config
+mkdir -p config
+echo "app.localhost 127.0.0.1:8080" > config/routes.conf
+
+### Start a test backend
+python3 -m http.server 8080 --directory www &
+
+### Run the proxy
+./proxy
+
+### Test
+curl -H "Host: app.localhost" http://localhost:8000/
+
+## Production Setup
+
+### 1. Install dependencies
+sudo apt install build-essential libssl-dev git python3
+
+### 2. Clone and build
+git clone https://github.com/charaevic/eezydep.git
+cd eezydep
+make
+
+### 3. Configure routes
+cp config/routes.conf.example config/routes.conf
+Edit routes.conf with your hostnames and backends
+
+### 4. Set up systemd services
+sudo cp systemd/eezydep.service /etc/systemd/system/
+sudo systemctl enable --now eezydep
+
+### 5. (Optional) Cloudflare Tunnel for public access
+See docs/cloudflare-setup.md
+
+## CLI Usage
+
+- `python3 cli/eezydep.py` route list
+- `python3 cli/eezydep.py` route add <hostname> <addr:port>
+- `python3 cli/eezydep.py` route remove <hostname>
+- `python3 cli/eezydep.py` status
+- `python3 cli/eezydep.py` logs
+- `python3 cli/eezydep.py` start|stop|restart|reload
+
 ## Current limitations
 
 Eezydep is still being hardened for reliability and security-sensitive
