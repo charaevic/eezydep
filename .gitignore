@@ -1,0 +1,6 @@
+*.o
+proxy
+tests/test_http_parser
+tests/test_parser
+*.tmp
+./unused
